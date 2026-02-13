@@ -78,6 +78,8 @@ export const session = initSessionMaker({
     },
   },
   authenticateAdmin: async (req) => {
+    console.log((req as any).headers["Admin-Session"]);
+    console.log(process.env["SESSION_PASSWORD"]);
     return (
       (req as any).headers["admin-session"] === process.env["SESSION_PASSWORD"]
     );
