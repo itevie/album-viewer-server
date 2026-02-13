@@ -10,6 +10,7 @@ export interface SessionMakerSession {
 export interface SessionMakerOptions {
   app: Express;
   makeSession?: () => string;
+  maxIncorrectSession?: number;
   db: {
     init: () => void;
     get: (id: string) => SessionMakerSession | undefined;
@@ -34,6 +35,9 @@ export interface SessionMakerReturn {
   ) => Promise<boolean>;
 }
 
+// Resets when server resets
+let requestMap: { [key: string]: number } = {};
+
 export function initSessionMaker(
   options: SessionMakerOptions,
 ): SessionMakerReturn {
@@ -50,7 +54,7 @@ export function initSessionMaker(
 
     let session = options.db.set({
       id: sessionId,
-      lifetime: 64000,
+      lifetime: 86400000,
       created_at: new Date().toISOString(),
     });
 
@@ -64,9 +68,25 @@ export function initSessionMaker(
     });
   });
 
+  function isRatelimited(ip: string): boolean {
+    if (!requestMap[ip]) requestMap[ip] = 0;
+    return requestMap[ip] > (options.maxIncorrectSession ?? 10);
+  }
+
+  function increaseRatelimit(ip: string): void {
+    if (!requestMap[ip]) requestMap[ip] = 0;
+    requestMap[ip]++;
+  }
+
   let r: SessionMakerReturn = {
     authenticateAdmin: async (req, res) => {
+      if (isRatelimited((req as any).ip))
+        return (res as any).status(401).send({
+          message: "Too many login attempts",
+        });
+
       if (!(await options.authenticateAdmin(req, res))) {
+        increaseRatelimit((req as any).ip);
         (res as any).status(401).send({
           message: "Not authenticated as admin",
         });
@@ -76,6 +96,11 @@ export function initSessionMaker(
       return true;
     },
     authenticateSession: async (req, res) => {
+      if (isRatelimited((req as any).ip))
+        return (res as any).status(401).send({
+          message: "Too many login attempts",
+        });
+
       let id = [
         (req as any).query?.["smid"],
         (req as any).body?.["smid"],
@@ -92,10 +117,21 @@ export function initSessionMaker(
       let session = options.db.get(id);
 
       if (!session || typeof session != "object") {
+        increaseRatelimit((req as any).ip);
         (res as any).status(401).send({
           message: "Invalid session",
         });
         return false;
+      }
+
+      if (
+        Date.now() - new Date(session.created_at).getTime() >
+        session.lifetime
+      ) {
+        options.db.del(session.id);
+        return (res as any).status(401).send({
+          message: "Session expired",
+        });
       }
 
       return true;

@@ -24,23 +24,41 @@ import sharp from "sharp";
 import "dotenv/config";
 import path, { resolve } from "path";
 import multer from "multer";
+import { randomUUID } from "crypto";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.set("trust proxy", true);
+app.use((req, res, next) => {
+  const isLocalhost =
+    req.hostname === "localhost" ||
+    req.hostname === "127.0.0.1" ||
+    req.ip === "::1";
+
+  const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
+
+  if (!isLocalhost && !isSecure) {
+    return res.redirect(`https://${req.headers.host}${req.url}`);
+  }
+
+  next();
+});
+
 let session = initSessionMaker({
   app,
-  makeSession: () => {
-    let keys = "abcdefghijklmnopqrstuvwxyz".split("");
-    let value = "";
+  makeSession: randomUUID,
+  // makeSession: () => {
+  //   let keys = "abcdefghijklmnopqrstuvwxyz".split("");
+  //   let value = "";
 
-    for (let i = 0; i != 6; i++) {
-      value += keys[Math.floor(Math.random() * keys.length)];
-    }
+  //   for (let i = 0; i != 6; i++) {
+  //     value += keys[Math.floor(Math.random() * keys.length)];
+  //   }
 
-    return value;
-  },
+  //   return value;
+  // },
   db: {
     get: (id) => {
       return db
@@ -55,7 +73,7 @@ let session = initSessionMaker({
         CREATE TABLE IF NOT EXISTS sessions (
           id TEXT PRIMARY KEY NOT NULL,
           created_at TEXT NOT NULL,
-          lifetime INT NOT NULL DEFAULT 64000
+          lifetime INT NOT NULL DEFAULT 86400000
         );
       `);
     },
@@ -95,12 +113,9 @@ app.post("/upload", upload.array("files"), async (req, res) => {
     const destDir = path.join(config.dataPath, "images");
 
     for (const file of req.files as Express.Multer.File[]) {
-      if (file.originalname.includes("/"))
-        return res.status(400).send({
-          message: "Image file cannot contain /",
-        });
+      let p = path.basename(file.originalname);
 
-      const destPath = path.join(destDir, file.originalname);
+      const destPath = path.join(destDir, p);
 
       fs.renameSync(file.path, destPath);
     }
@@ -194,8 +209,13 @@ app.get("/images/:id/view", async (req, res) => {
   }
 
   if (req.query["size"]) {
+    const size = Math.min(
+      Math.max(parseInt(req.query["size"].toString()), 50),
+      4000,
+    );
+
     let result = await sharp(fs.readFileSync(path))
-      .resize({ width: parseInt(req.query["size"].toString()) })
+      .resize({ width: size })
       .webp({ quality: 70 })
       .toBuffer();
 
@@ -344,8 +364,9 @@ app.use(express.static(resolve(__dirname + "/web")));
 
   scan();
 
-  app.listen(config.port);
-  console.log(`Listening on port ${config.port}`);
+  let port = process.env["PORT"];
+  app.listen(port);
+  console.log(`Listening on port ${port}`);
 })();
 
 function getDirSize(dir: string) {
