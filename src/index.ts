@@ -33,17 +33,17 @@ app.use((req, res, next) => {
 
 export const session = initSessionMaker({
   app,
-  makeSession: randomUUID,
-  // makeSession: () => {
-  //   let keys = "abcdefghijklmnopqrstuvwxyz".split("");
-  //   let value = "";
+  // makeSession: randomUUID,
+  makeSession: () => {
+    let keys = "abcdefghijklmnopqrstuvwxyz".split("");
+    let value = "";
 
-  //   for (let i = 0; i != 6; i++) {
-  //     value += keys[Math.floor(Math.random() * keys.length)];
-  //   }
+    for (let i = 0; i != 10; i++) {
+      value += keys[Math.floor(Math.random() * keys.length)];
+    }
 
-  //   return value;
-  // },
+    return value;
+  },
   db: {
     get: (id) => {
       return db

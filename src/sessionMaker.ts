@@ -50,11 +50,20 @@ export function initSessionMaker(
       });
     }
 
+    let lifetime: number = 86400000;
+    if (req.query["lifetime"]) {
+      if (isNaN(parseInt(req.query["lifetime"].toString())))
+        return res.status(400).send({
+          message: "Lifetime is not valid",
+        });
+      lifetime = parseInt(req.query["lifetime"].toString());
+    }
+
     let sessionId = (options.makeSession ?? randomUUID)();
 
     let session = options.db.set({
       id: sessionId,
-      lifetime: 86400000,
+      lifetime: lifetime,
       created_at: new Date().toISOString(),
     });
 
