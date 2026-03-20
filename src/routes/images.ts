@@ -1,11 +1,12 @@
 import exifr from "exifr";
-import { Express } from "express";
 import {
   deletePhoto,
   getImagesTag,
   getPhoto,
   getPhotos,
   getTagByName,
+  searchPhotos,
+  setNotes,
 } from "../database";
 import config from "../config";
 import fs from "fs";
@@ -95,7 +96,7 @@ app.get("/images/:id/view", async (req, res) => {
   if (req.query["size"]) {
     const size = Math.min(
       Math.max(parseInt(req.query["size"].toString()), 50),
-      4000,
+      4000
     );
 
     let result: Buffer<ArrayBufferLike> | null = null;
@@ -118,6 +119,29 @@ app.get("/images/:id/view", async (req, res) => {
   }
 
   return res.sendFile(path);
+});
+
+app.get("/images/details/:id", async (req, res) => {
+  if (!(await session.authenticateSession(req, res))) return;
+
+  let id: number;
+  if (isNaN(parseInt(req.params.id))) {
+    return res.status(400).send({
+      message: "Invalid id!",
+    });
+  }
+
+  id = parseInt(req.params.id);
+
+  let image = getPhoto(id);
+
+  if (!image) {
+    return res.status(404).send({
+      message: "Image not found",
+    });
+  }
+
+  return res.status(200).send(image);
 });
 
 app.get("/images/:id/exif", async (req, res) => {
@@ -152,4 +176,53 @@ app.get("/images/:id/exif", async (req, res) => {
   let exif = await exifr.parse(buffer);
 
   return res.send(exif);
+});
+
+app.patch("/images/:id/notes", async (req, res) => {
+  if (!(await session.authenticateAdmin(req, res))) return;
+  let notes = req.body["notes"];
+
+  if (notes == null)
+    return res.status(400).send({
+      message: "Notes is empty",
+    });
+
+  let id: number;
+  if (isNaN(parseInt(req.params.id))) {
+    return res.status(400).send({
+      message: "Invalid id!",
+    });
+  }
+
+  id = parseInt(req.params.id);
+
+  const photo = setNotes(id, notes.toString());
+  console.log(photo);
+
+  return res.status(200).send(photo);
+});
+
+app.get("/image-search", async (req, res) => {
+  if (!(await session.authenticateSession(req, res))) return;
+  const photos = getPhotos();
+
+  const tags = req.query["tags"]?.toString();
+  const search = req.query["search"]?.toString();
+
+  if (!tags && !search) {
+    return res
+      .status(400)
+      .send({ message: "Tags or search must be specified" });
+  }
+
+  const results = searchPhotos(
+    photos,
+    (search ?? "").trim(),
+    (tags ?? "")
+      .split(",")
+      .map((x) => parseInt(x))
+      .map((x) => (isNaN(x) ? -1 : x))
+  );
+
+  return res.status(200).send(results);
 });

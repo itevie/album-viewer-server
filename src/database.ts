@@ -19,7 +19,8 @@ export function initDb() {
     CREATE TABLE IF NOT EXISTS images (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      added_at TEXT NOT NULL
+      added_at TEXT NOT NULL,
+      notes TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS tags (
@@ -40,6 +41,7 @@ export interface Photo {
   id: number;
   name: string;
   added_at: string;
+  notes: string;
   tags: number[];
 }
 
@@ -60,13 +62,13 @@ export function getPhotos(): Photo[] {
 
 export function getPhoto(id: number): Photo | undefined {
   return addTagsToImage(
-    db.prepare<[number], Photo>("SELECT * FROM images WHERE id = ?").get(id),
+    db.prepare<[number], Photo>("SELECT * FROM images WHERE id = ?").get(id)
   );
 }
 
 export function deletePhoto(photo: Photo): void {
   db.prepare<[number]>("DELETE FROM image_tags WHERE image_id = ?").run(
-    photo.id,
+    photo.id
   );
   db.prepare<[number]>("DELETE FROM images WHERE id = ?").run(photo.id);
 
@@ -81,10 +83,18 @@ export function deletePhoto(photo: Photo): void {
 
 export function getPhotoByName(name: string): Photo | undefined {
   return addTagsToImage(
-    db
-      .prepare<[string], Photo>("SELECT * FROM images WHERE name = ?")
-      .get(name),
+    db.prepare<[string], Photo>("SELECT * FROM images WHERE name = ?").get(name)
   );
+}
+
+export function setNotes(photoId: number, notes: string): Photo {
+  return addTagsToImage(
+    db
+      .prepare<[String, number], Photo>(
+        "UPDATE images SET notes = ? WHERE id = ? RETURNING *"
+      )
+      .get(notes, photoId)
+  )!;
 }
 
 export function getTags(): Tag[] {
@@ -93,7 +103,7 @@ export function getTags(): Tag[] {
 
 export function createTag(name: string): void {
   db.prepare<[string, string]>(
-    "INSERT INTO tags (name, added_at) VALUES (?, ?)",
+    "INSERT INTO tags (name, added_at) VALUES (?, ?)"
   ).run(name, new Date().toISOString());
 }
 
@@ -114,7 +124,7 @@ export function getImagesTag(tag: number): Photo[] {
       FROM image_tags
       WHERE tag_id = ?
     );
-  `,
+  `
     )
     .all(tag);
 }
@@ -138,17 +148,16 @@ export function getTagsForImage(imageId: number): number[] {
 
 export function insertImage(name: string, addedAt: Date): Photo {
   return db
-    .prepare<
-      [string, string],
-      Photo
-    >("INSERT INTO images (name, added_at) VALUES (?, ?) RETURNING *")
+    .prepare<[string, string], Photo>(
+      "INSERT INTO images (name, added_at) VALUES (?, ?) RETURNING *"
+    )
     .get(name, addedAt.toISOString())!;
 }
 
 export function insertImageTag(imageId: number, tagId: number) {
   try {
     db.prepare<[number, number]>(
-      "INSERT INTO image_tags (image_id, tag_id) VALUES (?, ?)",
+      "INSERT INTO image_tags (image_id, tag_id) VALUES (?, ?)"
     ).run(imageId, tagId);
   } catch (e: any) {
     if (!e.toString().includes("UNIQUE")) throw e;
@@ -157,6 +166,37 @@ export function insertImageTag(imageId: number, tagId: number) {
 
 export function removeImageTag(imageId: number, tagId: number) {
   db.prepare<[number, number]>(
-    "DELETE FROM image_tags WHERE image_id = ? AND tag_id = ?",
+    "DELETE FROM image_tags WHERE image_id = ? AND tag_id = ?"
   ).run(imageId, tagId);
+}
+
+export function searchPhotos(
+  photos: Photo[],
+  search: string,
+  tags: number[]
+): Photo[] {
+  const normalize = (s: string) =>
+    (s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); // remove EVERYTHING except letters/numbers
+
+  const query = normalize(search);
+
+  return photos.filter((photo) => {
+    const haystack = normalize(`${photo.name} ${photo.notes}`);
+
+    const textMatch =
+      query === "" ||
+      haystack.includes(query) ||
+      query.split(/\s+/).some((part) => part && haystack.includes(part));
+
+    const tagMatch =
+      tags.length === 0 ||
+      (tags.length == 1 && tags[0] === -1) ||
+      tags.every((tag) => (photo.tags || []).includes(tag));
+
+    if (photo.notes.length > 0) {
+      console.log(photo.notes, tagMatch, tags.length, search, tags, haystack);
+    }
+
+    return textMatch && tagMatch;
+  });
 }

@@ -47,10 +47,9 @@ export const session = initSessionMaker({
   db: {
     get: (id) => {
       return db
-        .prepare<
-          [String],
-          SessionMakerSession
-        >("SELECT * FROM sessions WHERE id = ?")
+        .prepare<[String], SessionMakerSession>(
+          "SELECT * FROM sessions WHERE id = ?"
+        )
         .get(id);
     },
     init: () => {
@@ -72,7 +71,7 @@ export const session = initSessionMaker({
         INSERT INTO sessions (id, lifetime, created_at)
           VALUES(?, ?, ?)
           RETURNING *
-      `,
+      `
         )
         .get(session.id, session.lifetime, session.created_at)!;
     },
