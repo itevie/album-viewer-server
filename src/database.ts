@@ -114,9 +114,10 @@ export function getTagByName(name: String): Tag | undefined {
 }
 
 export function getImagesTag(tag: number): Photo[] {
-  return db
-    .prepare<[number], Photo>(
-      `
+  return addTagsToImages(
+    db
+      .prepare<[number], Photo>(
+        `
     SELECT *
     FROM images
     WHERE id IN (
@@ -125,8 +126,9 @@ export function getImagesTag(tag: number): Photo[] {
       WHERE tag_id = ?
     );
   `
-    )
-    .all(tag);
+      )
+      .all(tag)
+  );
 }
 
 export function addTagsToImage(image: Photo | undefined): Photo | undefined {
