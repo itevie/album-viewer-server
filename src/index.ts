@@ -33,17 +33,18 @@ app.use((req, res, next) => {
 
 export const session = initSessionMaker({
   app,
-  // makeSession: randomUUID,
-  makeSession: () => {
-    let keys = "abcdefghijklmnopqrstuvwxyz".split("");
-    let value = "";
+  makeSession: process.env["USE_UUID"]
+    ? randomUUID
+    : () => {
+        let keys = "abcdefghijklmnopqrstuvwxyz".split("");
+        let value = "";
 
-    for (let i = 0; i != 10; i++) {
-      value += keys[Math.floor(Math.random() * keys.length)];
-    }
+        for (let i = 0; i != 10; i++) {
+          value += keys[Math.floor(Math.random() * keys.length)];
+        }
 
-    return value;
-  },
+        return value;
+      },
   db: {
     get: (id) => {
       return db
@@ -109,6 +110,6 @@ import "./routes/util";
   scan();
 
   let port = process.env["PORT"];
-  app.listen(port);
+  app.listen(parseInt(port ?? "8000"), "127.0.0.1");
   console.log(`Listening on port ${port}`);
 })();
