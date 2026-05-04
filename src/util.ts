@@ -47,7 +47,7 @@ export async function scan() {
   }
   let tag = getTagByName("all_locked", true);
   if (!tag) {
-    createTag("all_locked");
+    createTag("all_locked", true);
     tag = getTagByName("all_locked", true);
   }
 
