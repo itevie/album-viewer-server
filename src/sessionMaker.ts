@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 export interface SessionMakerSession {
   id: string;
   lifetime: number;
+  allow_locked: boolean;
   created_at: string;
 }
 
@@ -19,19 +20,24 @@ export interface SessionMakerOptions {
   };
   authenticateAdmin: (
     req: Express.Request,
-    res: Express.Response,
+    res: Express.Response
   ) => Promise<boolean>;
 }
 
 export interface SessionMakerReturn {
   authenticateSession: (
     req: Express.Request,
-    res: Express.Response,
+    res: Express.Response
   ) => Promise<boolean>;
 
   authenticateAdmin: (
     req: Express.Request,
-    res: Express.Response,
+    res: Express.Response
+  ) => Promise<boolean>;
+
+  authenticateLocked: (
+    req: Express.Request,
+    res: Express.Response
   ) => Promise<boolean>;
 }
 
@@ -39,7 +45,7 @@ export interface SessionMakerReturn {
 let requestMap: { [key: string]: number } = {};
 
 export function initSessionMaker(
-  options: SessionMakerOptions,
+  options: SessionMakerOptions
 ): SessionMakerReturn {
   options.db.init();
 
@@ -59,12 +65,23 @@ export function initSessionMaker(
       lifetime = parseInt(req.query["lifetime"].toString());
     }
 
-    let sessionId = (options.makeSession ?? randomUUID)();
+    let allow_locked = false;
+    if (req.query["allow_locked"]) {
+      let part = req.query["allow_locked"];
+
+      if (part === "true") {
+        allow_locked = true;
+      }
+    }
+
+    let sessionId =
+      (options.makeSession ?? randomUUID)() + (allow_locked ? "_LOCKED" : "");
 
     let session = options.db.set({
       id: sessionId,
       lifetime: lifetime,
       created_at: new Date().toISOString(),
+      allow_locked,
     });
 
     return res.status(200).send(session);
@@ -103,6 +120,32 @@ export function initSessionMaker(
       }
 
       return true;
+    },
+    authenticateLocked: async (req, res) => {
+      if (await options.authenticateAdmin(req, res)) {
+        return true;
+      }
+
+      let id = [
+        (req as any).query?.["smid"],
+        (req as any).body?.["smid"],
+        (req as any).headers?.["smid"],
+      ].filter((x) => !!x)[0];
+
+      if (!id) {
+        (res as any).status(401).send({
+          message: "Missing smid",
+        });
+        return false;
+      }
+
+      let session = options.db.get(id);
+
+      if (!session || typeof session != "object") {
+        return false;
+      }
+
+      return session.allow_locked;
     },
     authenticateSession: async (req, res) => {
       if (isRatelimited((req as any).ip))

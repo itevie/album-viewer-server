@@ -3,7 +3,10 @@ import fs from "fs";
 import config from "./config";
 import { readFile } from "fs/promises";
 import exifr from "exifr";
-import { getPhotoByName, insertImage } from "./database";
+import { getPhotoByName, insertImage } from "./database/photo";
+import { SessionMakerSession } from "./sessionMaker";
+import { addTagsToImage, createTag, getTagByName } from "./database/tags";
+import { insertImageTag } from "./database/photo_tag";
 
 export function getDirSize(dir: string) {
   let total = 0;
@@ -23,17 +26,52 @@ export function getDirSize(dir: string) {
 }
 
 export async function scan() {
-  let path = config.dataPath + "/images";
+  const basePath = `${config.dataPath}/images`;
+  const lockedPath = `${basePath}/locked`;
 
-  let files = fs.readdirSync(path);
+  if (fs.existsSync(lockedPath)) {
+    const lockedFiles = fs.readdirSync(lockedPath);
+
+    for (const file of lockedFiles) {
+      const oldPath = `${lockedPath}/${file}`;
+      const newName = file.startsWith("LOCKED_") ? file : `LOCKED_${file}`;
+      const newPath = `${basePath}/${newName}`;
+
+      try {
+        fs.renameSync(oldPath, newPath);
+        console.log(`Moved locked image: ${file} -> ${newName}`);
+      } catch (e) {
+        console.log(`Failed to move ${file}`, e);
+      }
+    }
+  }
+  let tag = getTagByName("all_locked", true);
+  if (!tag) {
+    createTag("all_locked");
+    tag = getTagByName("all_locked", true);
+  }
+
+  const files = fs.readdirSync(basePath);
 
   for await (const file of files) {
-    let buffer = await readFile(`${path}/${file}`);
-    let exif = await exifr.parse(buffer);
-    let date = exif["CreateDate"] as Date;
-    if (!getPhotoByName(file)) {
-      insertImage(file, date ?? new Date());
-      console.log(`${file} was inserted`);
+    // skip directories (like "locked" if still present)
+    const fullPath = `${basePath}/${file}`;
+    if (fs.statSync(fullPath).isDirectory()) continue;
+
+    const buffer = await readFile(fullPath);
+    const exif = (await exifr.parse(buffer)) ?? {};
+    const date = exif["CreateDate"] as Date;
+
+    if (!getPhotoByName(file, true)) {
+      const photo = insertImage(file, date ?? new Date(), true);
+
+      if (file.startsWith("LOCKED_")) {
+        insertImageTag(photo.id, tag!.id);
+      }
+
+      console.log(
+        `${file} ${file.startsWith("LOCKED_") ? "LOCKED " : ""}was inserted`
+      );
     }
   }
 }

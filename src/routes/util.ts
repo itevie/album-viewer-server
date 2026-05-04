@@ -1,6 +1,7 @@
 import { app, session } from "..";
 import config from "../config";
-import { getPhotos, getTags } from "../database";
+import { getPhotos } from "../database/photo";
+import { getTags } from "../database/tags";
 import { getDirSize } from "../util";
 
 app.get("/stats", async (req, res) => {

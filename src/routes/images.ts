@@ -1,18 +1,18 @@
 import exifr from "exifr";
-import {
-  deletePhoto,
-  getImagesTag,
-  getPhoto,
-  getPhotos,
-  getTagByName,
-  searchPhotos,
-  setNotes,
-} from "../database";
+
 import config from "../config";
 import fs from "fs";
 import { app, session } from "..";
 import sharp from "sharp";
 import { readFile } from "fs/promises";
+import {
+  getPhotos,
+  deletePhoto,
+  getPhoto,
+  setNotes,
+  searchPhotos,
+} from "../database/photo";
+import { getTagByName, getImagesTag } from "../database/tags";
 
 app.delete("/images", async (req, res) => {
   if (!(await session.authenticateAdmin(req, res))) return;
@@ -28,7 +28,7 @@ app.delete("/images", async (req, res) => {
 
   let images = req.body["images"] as number[];
 
-  let photos = getPhotos().filter((x) => images.includes(x.id));
+  let photos = getPhotos(true).filter((x) => images.includes(x.id));
 
   for (const photo of photos) deletePhoto(photo);
 
@@ -39,7 +39,7 @@ app.delete("/images", async (req, res) => {
 
 app.get("/images", async (req, res) => {
   if (!(await session.authenticateSession(req, res))) return;
-  return res.send(getPhotos());
+  return res.send(getPhotos(await session.authenticateLocked(req, res)));
 });
 
 app.get("/random", async (req, res) => {
@@ -55,14 +55,19 @@ app.get("/random", async (req, res) => {
 app.get("/images/:tag", async (req, res) => {
   if (!(await session.authenticateSession(req, res))) return;
 
-  let tag = getTagByName(req.params.tag);
+  let tag = getTagByName(
+    req.params.tag,
+    await session.authenticateLocked(req, res)
+  );
 
   if (tag === undefined)
     return res.send({
       message: "Invalid tag!",
     });
 
-  return res.send(getImagesTag(tag.id));
+  return res.send(
+    getImagesTag(tag.id, await session.authenticateLocked(req, res))
+  );
 });
 
 app.get("/images/:id/view", async (req, res) => {
@@ -77,7 +82,7 @@ app.get("/images/:id/view", async (req, res) => {
 
   id = parseInt(req.params.id);
 
-  let image = getPhoto(id);
+  let image = getPhoto(id, await session.authenticateLocked(req, res));
 
   if (!image) {
     return res.status(404).send({
@@ -133,7 +138,7 @@ app.get("/images/details/:id", async (req, res) => {
 
   id = parseInt(req.params.id);
 
-  let image = getPhoto(id);
+  let image = getPhoto(id, await session.authenticateLocked(req, res));
 
   if (!image) {
     return res.status(404).send({
@@ -156,7 +161,7 @@ app.get("/images/:id/exif", async (req, res) => {
 
   id = parseInt(req.params.id);
 
-  let image = getPhoto(id);
+  let image = getPhoto(id, await session.authenticateLocked(req, res));
 
   if (!image) {
     return res.status(404).send({
@@ -197,14 +202,13 @@ app.patch("/images/:id/notes", async (req, res) => {
   id = parseInt(req.params.id);
 
   const photo = setNotes(id, notes.toString());
-  console.log(photo);
 
   return res.status(200).send(photo);
 });
 
 app.get("/image-search", async (req, res) => {
   if (!(await session.authenticateSession(req, res))) return;
-  const photos = getPhotos();
+  const photos = getPhotos(await session.authenticateLocked(req, res));
 
   const tags = req.query["tags"]?.toString();
   const search = req.query["search"]?.toString();

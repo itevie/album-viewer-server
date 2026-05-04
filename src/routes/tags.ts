@@ -1,15 +1,11 @@
 import { app, session } from "..";
-import {
-  createTag,
-  getTags,
-  insertImageTag,
-  removeImageTag,
-} from "../database";
+import { insertImageTag, removeImageTag } from "../database/photo_tag";
+import { getTags, createTag } from "../database/tags";
 
 app.get("/tags", async (req, res) => {
   if (!(await session.authenticateSession(req, res))) return;
 
-  return res.send(getTags());
+  return res.send(getTags(await session.authenticateLocked(req, res)));
 });
 
 app.post("/tags/:tag", async (req, res) => {
@@ -34,7 +30,7 @@ app.post("/images/tags/:tag", async (req, res) => {
 
   let tag = req.params["tag"].toString();
 
-  let exists = getTags().find((x) => x.id.toString() === tag);
+  let exists = getTags(true).find((x) => x.id.toString() === tag);
 
   if (!exists)
     return res.status(400).send({
@@ -64,7 +60,7 @@ app.delete("/images/tags/:tag", async (req, res) => {
 
   let tag = req.params["tag"].toString();
 
-  let exists = getTags().find((x) => x.id.toString() === tag);
+  let exists = getTags(true).find((x) => x.id.toString() === tag);
 
   if (!exists)
     return res.status(400).send({

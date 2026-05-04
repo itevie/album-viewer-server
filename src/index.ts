@@ -1,6 +1,6 @@
 import express from "express";
 import config from "./config";
-import { db, initDb } from "./database";
+import { db, initDb } from "./database/init";
 import * as fs from "fs";
 import cors from "cors";
 import { initSessionMaker, SessionMakerSession } from "./sessionMaker";
@@ -57,7 +57,8 @@ export const session = initSessionMaker({
         CREATE TABLE IF NOT EXISTS sessions (
           id TEXT PRIMARY KEY NOT NULL,
           created_at TEXT NOT NULL,
-          lifetime INT NOT NULL DEFAULT 86400000
+          lifetime INT NOT NULL DEFAULT 86400000,
+          allow_locked INT NOT NULL DEFAULT 0
         );
       `);
     },
@@ -66,14 +67,19 @@ export const session = initSessionMaker({
     },
     set: (session) => {
       return db
-        .prepare<[string, number, string], SessionMakerSession>(
+        .prepare<[string, number, string, number], SessionMakerSession>(
           `
-        INSERT INTO sessions (id, lifetime, created_at)
-          VALUES(?, ?, ?)
+        INSERT INTO sessions (id, lifetime, created_at, allow_locked)
+          VALUES(?, ?, ?, ?)
           RETURNING *
       `
         )
-        .get(session.id, session.lifetime, session.created_at)!;
+        .get(
+          session.id,
+          session.lifetime,
+          session.created_at,
+          session.allow_locked ? 1 : 0
+        )!;
     },
   },
   authenticateAdmin: async (req) => {
