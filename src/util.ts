@@ -70,7 +70,7 @@ export async function scan() {
       }
 
       console.log(
-        `${file} ${file.startsWith("LOCKED_") ? "LOCKED " : ""}was inserted`
+        `${file} ${file.startsWith("LOCKED_") ? "LOCKED " : ""}was inserted`,
       );
     }
   }

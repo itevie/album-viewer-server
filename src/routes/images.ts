@@ -13,6 +13,7 @@ import {
   searchPhotos,
 } from "../database/photo";
 import { getTagByName, getImagesTag } from "../database/tags";
+import { handleBots } from "../meta";
 
 app.delete("/images", async (req, res) => {
   if (!(await session.authenticateAdmin(req, res))) return;
@@ -39,12 +40,14 @@ app.delete("/images", async (req, res) => {
 
 app.get("/images", async (req, res) => {
   if (!(await session.authenticateSession(req, res))) return;
+  if (await handleBots(req, res, { title: "Album Viewer - Images" })) return;
+
   return res.send(getPhotos(await session.authenticateLocked(req, res)));
 });
 
 app.get("/random", async (req, res) => {
   if (!(await session.authenticateSession(req, res))) return;
-
+  if (await handleBots(req, res, { title: "Album Viewer - Random" })) return;
   let photos = getPhotos();
 
   return res
@@ -54,10 +57,12 @@ app.get("/random", async (req, res) => {
 
 app.get("/images/:tag", async (req, res) => {
   if (!(await session.authenticateSession(req, res))) return;
+  if (await handleBots(req, res, { title: `Album Viewer - ${req.params.tag}` }))
+    return;
 
   let tag = getTagByName(
     req.params.tag,
-    await session.authenticateLocked(req, res)
+    await session.authenticateLocked(req, res),
   );
 
   if (tag === undefined)
@@ -66,13 +71,12 @@ app.get("/images/:tag", async (req, res) => {
     });
 
   return res.send(
-    getImagesTag(tag.id, await session.authenticateLocked(req, res))
+    getImagesTag(tag.id, await session.authenticateLocked(req, res)),
   );
 });
 
 app.get("/images/:id/view", async (req, res) => {
   if (!(await session.authenticateSession(req, res))) return;
-
   let id: number;
   if (isNaN(parseInt(req.params.id))) {
     return res.status(400).send({
@@ -101,7 +105,7 @@ app.get("/images/:id/view", async (req, res) => {
   if (req.query["size"]) {
     const size = Math.min(
       Math.max(parseInt(req.query["size"].toString()), 50),
-      4000
+      4000,
     );
 
     let result: Buffer<ArrayBufferLike> | null = null;
@@ -225,7 +229,7 @@ app.get("/image-search", async (req, res) => {
     (tags ?? "")
       .split(",")
       .map((x) => parseInt(x))
-      .map((x) => (isNaN(x) ? -1 : x))
+      .map((x) => (isNaN(x) ? -1 : x)),
   );
 
   return res.status(200).send(results);
