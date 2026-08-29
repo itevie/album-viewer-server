@@ -79,30 +79,35 @@ export async function scan() {
     }
   }
 
-  if (process.env["DISCORD_WEBHOOK"] && added.length > 0) {
-    const sessionId = session.options.makeSession?.() ?? randomUUID();
-    const s = session.options.db.set({
-      id: sessionId,
-      lifetime: 60 * 60 * 24 * 5,
-      allow_locked: false,
-      created_at: new Date().toISOString(),
-    });
+  try {
+    if (process.env["DISCORD_WEBHOOK"] && added.length > 0) {
+      const sessionId = session.options.makeSession?.() ?? randomUUID();
+      const s = session.options.db.set({
+        id: sessionId,
+        lifetime: 60 * 60 * 24 * 5,
+        allow_locked: false,
+        created_at: new Date().toISOString(),
+      });
 
-    const host = process.env["HOST"] ?? "(unknown-host)";
+      const host = process.env["HOST"] ?? "(unknown-host)";
 
-    const random = added.sort(() => Math.random() - 0.5).slice(0, 5);
-    const message =
-      `I added new photos to my website! :3 Check them out: ${host}?smid=${s.id}` +
-      `\n\n${random.map((x) => `${host}/images/${x.id}/view?smid=${s.id}`).join(" ")}`;
+      const random = added.sort(() => Math.random() - 0.5).slice(0, 5);
+      const message =
+        `I added new photos to my website! :3 Check them out: ${host}?smid=${s.id}` +
+        `\n\n${random.map((x) => `${host}/images/${x.id}/view?smid=${s.id}`).join(" ")}`;
 
-    await fetch(process.env["DISCORD_WEBHOOK"], {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        content: message,
-      }),
-    });
+      await fetch(process.env["DISCORD_WEBHOOK"], {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: message,
+        }),
+      });
+    }
+  } catch (e) {
+    console.log("Failed to send webhook");
+    console.log(e);
   }
 }
