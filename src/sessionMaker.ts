@@ -20,32 +20,33 @@ export interface SessionMakerOptions {
   };
   authenticateAdmin: (
     req: Express.Request,
-    res: Express.Response
+    res: Express.Response,
   ) => Promise<boolean>;
 }
 
 export interface SessionMakerReturn {
   authenticateSession: (
     req: Express.Request,
-    res: Express.Response
+    res: Express.Response,
   ) => Promise<boolean>;
 
   authenticateAdmin: (
     req: Express.Request,
-    res: Express.Response
+    res: Express.Response,
   ) => Promise<boolean>;
 
   authenticateLocked: (
     req: Express.Request,
-    res: Express.Response
+    res: Express.Response,
   ) => Promise<boolean>;
+  options: SessionMakerOptions;
 }
 
 // Resets when server resets
 let requestMap: { [key: string]: number } = {};
 
 export function initSessionMaker(
-  options: SessionMakerOptions
+  options: SessionMakerOptions,
 ): SessionMakerReturn {
   options.db.init();
 
@@ -188,6 +189,7 @@ export function initSessionMaker(
 
       return true;
     },
+    options: options,
   };
 
   return r;

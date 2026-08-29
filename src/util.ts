@@ -3,10 +3,12 @@ import fs from "fs";
 import config from "./config";
 import { readFile } from "fs/promises";
 import exifr from "exifr";
-import { getPhotoByName, insertImage } from "./database/photo";
+import { getPhotoByName, insertImage, Photo } from "./database/photo";
 import { SessionMakerSession } from "./sessionMaker";
 import { addTagsToImage, createTag, getTagByName } from "./database/tags";
 import { insertImageTag } from "./database/photo_tag";
+import { session } from ".";
+import { randomUUID } from "crypto";
 
 export function getDirSize(dir: string) {
   let total = 0;
@@ -52,6 +54,7 @@ export async function scan() {
   }
 
   const files = fs.readdirSync(basePath);
+  const added: Photo[] = [];
 
   for await (const file of files) {
     // skip directories (like "locked" if still present)
@@ -64,6 +67,7 @@ export async function scan() {
 
     if (!getPhotoByName(file, true)) {
       const photo = insertImage(file, date ?? new Date(), true);
+      added.push(photo);
 
       if (file.startsWith("LOCKED_")) {
         insertImageTag(photo.id, tag!.id);
@@ -73,5 +77,32 @@ export async function scan() {
         `${file} ${file.startsWith("LOCKED_") ? "LOCKED " : ""}was inserted`,
       );
     }
+  }
+
+  if (process.env["DISCORD_WEBHOOK"] && added.length > 0) {
+    const sessionId = session.options.makeSession?.() ?? randomUUID();
+    const s = session.options.db.set({
+      id: sessionId,
+      lifetime: 60 * 60 * 24 * 5,
+      allow_locked: false,
+      created_at: new Date().toISOString(),
+    });
+
+    const host = process.env["HOST"] ?? "(unknown-host)";
+
+    const random = added.sort(() => Math.random() - 0.5).slice(0, 5);
+    const message =
+      `I added new photos to my website! :3 Check them out: ${host}?smid=${s.id}` +
+      `\n\n${random.map((x) => `${host}/images/${x.id}/view?smid=${s.id}`).join(" ")}`;
+
+    await fetch(process.env["DISCORD_WEBHOOK"], {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content: message,
+      }),
+    });
   }
 }
